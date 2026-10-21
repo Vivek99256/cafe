@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   Plus,
   Search,
@@ -11,11 +10,11 @@ import {
   Edit2,
   Check,
   X,
-  ExternalLink,
   RefreshCw,
   AlertCircle,
-  Eye,
-  Flame,
+  Camera,
+  UploadCloud,
+  Link as LinkIcon,
   Sparkles,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
@@ -60,14 +59,23 @@ interface Category {
   menuItems: MenuItem[];
 }
 
+const isUnoptimized = (url?: string | null) => {
+  if (!url) return false;
+  if (url.startsWith("data:")) return true;
+  if (!url.includes("images.unsplash.com") && !url.includes("images.pexels.com")) return true;
+  return false;
+};
+
 export default function MenuManagementPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
 
-  // Add Item Modal
+  // Modal State
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+
   const [formData, setFormData] = useState({
     categoryId: "",
     name: "",
@@ -81,6 +89,7 @@ export default function MenuManagementPage() {
     allergens: "",
     preparationTime: "10",
   });
+
   const [variantsList, setVariantsList] = useState<Variant[]>([]);
   const [newVarName, setNewVarName] = useState("");
   const [newVarPrice, setNewVarPrice] = useState("");
@@ -88,6 +97,17 @@ export default function MenuManagementPage() {
   const [addonsList, setAddonsList] = useState<AddOn[]>([]);
   const [newAddonName, setNewAddonName] = useState("");
   const [newAddonPrice, setNewAddonPrice] = useState("");
+
+  // Photo / Camera States
+  const [imageSourceMode, setImageSourceMode] = useState<"file" | "camera" | "url">("file");
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isCapturingLive, setIsCapturingLive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -111,6 +131,15 @@ export default function MenuManagementPage() {
 
   useEffect(() => {
     fetchMenu();
+  }, []);
+
+  // Cleanup camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
   }, []);
 
   const handleToggleAvailability = async (itemId: string, current: boolean) => {
@@ -162,7 +191,191 @@ export default function MenuManagementPage() {
     setNewAddonPrice("");
   };
 
-  const handleCreateItem = async (e: React.FormEvent) => {
+  // Image Processing Helpers
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith("image/")) {
+        reject(new Error("Please select an image file (JPG, PNG, WebP, etc.)."));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Failed to read image file."));
+      reader.onload = (e) => {
+        const img = document.createElement("img");
+        img.onerror = () => reject(new Error("Failed to load image."));
+        img.onload = () => {
+          const maxWidth = 900;
+          const maxHeight = 900;
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          resolve(dataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsCompressing(true);
+    setModalError(null);
+    try {
+      const dataUrl = await compressImage(file);
+      setFormData((prev) => ({ ...prev, imageUrl: dataUrl }));
+    } catch (err: unknown) {
+      setModalError(err instanceof Error ? err.message : "Failed to process photo");
+    } finally {
+      setIsCompressing(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleDropFile = async (file: File) => {
+    setIsCompressing(true);
+    setModalError(null);
+    try {
+      const dataUrl = await compressImage(file);
+      setFormData((prev) => ({ ...prev, imageUrl: dataUrl }));
+    } catch (err: unknown) {
+      setModalError(err instanceof Error ? err.message : "Failed to process photo");
+    } finally {
+      setIsCompressing(false);
+    }
+  };
+
+  const startLiveCamera = async () => {
+    setCameraError(null);
+    setIsCapturingLive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch (err: unknown) {
+      console.error("Camera access error:", err);
+      setCameraError(
+        "Could not access live camera. Please allow camera permissions, or use 'Take Photo via Camera' or 'Upload File'."
+      );
+      setIsCapturingLive(false);
+    }
+  };
+
+  const stopLiveCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCapturingLive(false);
+  };
+
+  const capturePhotoFromLiveStream = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    const targetWidth = Math.min(video.videoWidth || 800, 900);
+    const targetHeight = Math.round(
+      (targetWidth * (video.videoHeight || 600)) / (video.videoWidth || 800)
+    );
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      setFormData((prev) => ({ ...prev, imageUrl: dataUrl }));
+    }
+    stopLiveCamera();
+  };
+
+  // Modal Open Handlers
+  const handleOpenCreateModal = () => {
+    stopLiveCamera();
+    setEditingItem(null);
+    setFormData({
+      categoryId: categories[0]?.id || "",
+      name: "",
+      description: "",
+      price: "",
+      imageUrl: "",
+      isVeg: true,
+      isVegan: false,
+      isSpicy: false,
+      isSpecial: false,
+      allergens: "",
+      preparationTime: "10",
+    });
+    setVariantsList([]);
+    setAddonsList([]);
+    setImageSourceMode("file");
+    setModalError(null);
+    setShowAddModal(true);
+  };
+
+  const handleOpenEditModal = (item: MenuItem) => {
+    stopLiveCamera();
+    setEditingItem(item);
+    setFormData({
+      categoryId: item.categoryId,
+      name: item.name,
+      description: item.description || "",
+      price: item.price.toString(),
+      imageUrl: item.imageUrl || "",
+      isVeg: item.isVeg,
+      isVegan: item.isVegan,
+      isSpicy: item.isSpicy,
+      isSpecial: item.isSpecial,
+      allergens: item.allergens || "",
+      preparationTime: (item.preparationTime || 10).toString(),
+    });
+    setVariantsList(item.variants || []);
+    setAddonsList(item.addOns || []);
+    setImageSourceMode(
+      item.imageUrl
+        ? item.imageUrl.startsWith("data:")
+          ? "file"
+          : "url"
+        : "file"
+    );
+    setModalError(null);
+    setShowAddModal(true);
+  };
+
+  const closeModal = () => {
+    stopLiveCamera();
+    setShowAddModal(false);
+    setEditingItem(null);
+    setModalError(null);
+  };
+
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.price || !formData.categoryId) {
       setModalError("Category, item name, and price are required.");
@@ -180,36 +393,26 @@ export default function MenuManagementPage() {
         addOns: addonsList,
       };
 
-      const res = await fetch("/api/dashboard/menu", {
-        method: "POST",
+      const url = editingItem
+        ? `/api/dashboard/menu/${editingItem.id}`
+        : "/api/dashboard/menu";
+      const method = editingItem ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to create menu item");
+        throw new Error(data.error || "Failed to save menu item");
       }
 
-      setShowAddModal(false);
-      setFormData({
-        categoryId: categories[0]?.id || "",
-        name: "",
-        description: "",
-        price: "",
-        imageUrl: "",
-        isVeg: true,
-        isVegan: false,
-        isSpicy: false,
-        isSpecial: false,
-        allergens: "",
-        preparationTime: "10",
-      });
-      setVariantsList([]);
-      setAddonsList([]);
+      closeModal();
       await fetchMenu();
     } catch (err: unknown) {
-      setModalError(err instanceof Error ? err.message : "Failed to create item");
+      setModalError(err instanceof Error ? err.message : "Failed to save item");
     } finally {
       setIsSubmitting(false);
     }
@@ -239,7 +442,7 @@ export default function MenuManagementPage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={handleOpenCreateModal}
             className="px-4 py-2 bg-[#2B1D18] hover:bg-[#3D2B24] text-[#FAF5EC] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4 text-[#C58B5B]" />
@@ -332,6 +535,7 @@ export default function MenuManagementPage() {
                                 src={item.imageUrl}
                                 alt={item.name}
                                 fill
+                                unoptimized={isUnoptimized(item.imageUrl)}
                                 className="object-cover"
                               />
                             ) : (
@@ -411,13 +615,24 @@ export default function MenuManagementPage() {
                           <span>{item.isAvailable ? "In Stock" : "Sold Out (86'd)"}</span>
                         </button>
 
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-1.5 text-stone-400 hover:text-rose-600 transition-colors"
-                          title="Delete Item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleOpenEditModal(item)}
+                            className="p-1.5 text-stone-600 hover:text-[#2B1D18] hover:bg-[#FAF5EC] rounded-lg transition-colors flex items-center gap-1 font-medium text-xs"
+                            title="Edit Item & Photo"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-[#C58B5B]" />
+                            <span>Edit</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Delete Item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -427,23 +642,26 @@ export default function MenuManagementPage() {
           })}
       </div>
 
-      {/* CREATE MENU ITEM MODAL */}
+      {/* CREATE / EDIT MENU ITEM MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-[#2B1D18]/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#FFFDF9] rounded-2xl border border-[#E6DCCE] p-6 max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-[#E6DCCE]">
-              <h3 className="font-serif font-bold text-lg text-[#2B1D18]">
-                Create New Menu Item
-              </h3>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#C58B5B]" />
+                <h3 className="font-serif font-bold text-lg text-[#2B1D18]">
+                  {editingItem ? `Edit Dish: ${editingItem.name}` : "Create New Menu Item"}
+                </h3>
+              </div>
               <button
-                onClick={() => setShowAddModal(false)}
-                className="text-[#24211F]/60 hover:text-[#2B1D18]"
+                onClick={closeModal}
+                className="text-[#24211F]/60 hover:text-[#2B1D18] p-1 rounded-lg hover:bg-[#FAF5EC]"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateItem} className="overflow-y-auto p-1 space-y-4 flex-1">
+            <form onSubmit={handleSaveItem} className="overflow-y-auto p-1 space-y-4 flex-1">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-[#24211F]/80 mb-1">
@@ -505,17 +723,229 @@ export default function MenuManagementPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-[#24211F]/80 mb-1">
-                  Food Photography Image URL
-                </label>
+              {/* PHOTO / PHOTOGRAPHY SELECTION SECTION */}
+              <div className="space-y-2.5 pt-2 border-t border-[#E6DCCE]">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-[#2B1D18]">
+                    Food Photography / Dish Photo
+                  </label>
+                  <span className="text-[11px] text-[#24211F]/60">
+                    File, Camera, or Web URL
+                  </span>
+                </div>
+
+                {/* Tabs to select how to supply photo */}
+                <div className="flex p-1 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE] text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopLiveCamera();
+                      setImageSourceMode("file");
+                    }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      imageSourceMode === "file"
+                        ? "bg-[#2B1D18] text-[#FAF5EC] shadow-xs"
+                        : "text-[#24211F]/70 hover:text-[#2B1D18]"
+                    }`}
+                  >
+                    <UploadCloud className="w-3.5 h-3.5 text-[#C58B5B]" />
+                    <span>Upload File</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopLiveCamera();
+                      setImageSourceMode("camera");
+                    }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      imageSourceMode === "camera"
+                        ? "bg-[#2B1D18] text-[#FAF5EC] shadow-xs"
+                        : "text-[#24211F]/70 hover:text-[#2B1D18]"
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5 text-[#C58B5B]" />
+                    <span>Click / Camera</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopLiveCamera();
+                      setImageSourceMode("url");
+                    }}
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                      imageSourceMode === "url"
+                        ? "bg-[#2B1D18] text-[#FAF5EC] shadow-xs"
+                        : "text-[#24211F]/70 hover:text-[#2B1D18]"
+                    }`}
+                  >
+                    <LinkIcon className="w-3.5 h-3.5 text-[#C58B5B]" />
+                    <span>Web URL</span>
+                  </button>
+                </div>
+
+                {/* Hidden Inputs */}
                 <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={formData.imageUrl}
-                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                  className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
                 />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {/* 1. File Upload Mode */}
+                {imageSourceMode === "file" && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleDropFile(file);
+                    }}
+                    className="border-2 border-dashed border-[#E6DCCE] hover:border-[#C58B5B] bg-[#FAF5EC]/50 hover:bg-[#FAF5EC] rounded-xl p-4 text-center cursor-pointer transition-colors"
+                  >
+                    <UploadCloud className="w-6 h-6 text-[#C58B5B] mx-auto mb-1.5" />
+                    <p className="text-xs font-semibold text-[#2B1D18]">
+                      Click to choose photo from device / gallery
+                    </p>
+                    <p className="text-[10px] text-[#24211F]/60 mt-0.5">
+                      Or drag and drop image here (JPG, PNG, WebP)
+                    </p>
+                  </div>
+                )}
+
+                {/* 2. Camera Mode (Mobile direct snap + Desktop Live Viewfinder) */}
+                {imageSourceMode === "camera" && (
+                  <div className="space-y-3">
+                    {isCapturingLive ? (
+                      <div className="relative rounded-xl overflow-hidden bg-black border border-[#E6DCCE]">
+                        <video
+                          ref={videoRef}
+                          autoPlay
+                          playsInline
+                          className="w-full h-56 object-cover"
+                        />
+                        <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            onClick={capturePhotoFromLiveStream}
+                            className="px-4 py-2 bg-[#C58B5B] hover:bg-[#b0784a] text-[#FAF5EC] rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg"
+                          >
+                            <Camera className="w-4 h-4" />
+                            <span>Capture Photo</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={stopLiveCamera}
+                            className="px-3 py-2 bg-black/70 hover:bg-black text-[#FAF5EC] rounded-xl text-xs font-semibold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="p-3 bg-[#FAF5EC] hover:bg-[#F2E9DB] border border-[#E6DCCE] rounded-xl flex flex-col items-center justify-center text-center gap-1.5 transition-colors"
+                        >
+                          <Camera className="w-5 h-5 text-[#C58B5B]" />
+                          <span className="text-xs font-bold text-[#2B1D18]">
+                            Device Camera
+                          </span>
+                          <span className="text-[10px] text-[#24211F]/60">
+                            Opens camera app on phone/tablet
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={startLiveCamera}
+                          className="p-3 bg-[#FAF5EC] hover:bg-[#F2E9DB] border border-[#E6DCCE] rounded-xl flex flex-col items-center justify-center text-center gap-1.5 transition-colors"
+                        >
+                          <Sparkles className="w-5 h-5 text-[#C58B5B]" />
+                          <span className="text-xs font-bold text-[#2B1D18]">
+                            Live Viewfinder
+                          </span>
+                          <span className="text-[10px] text-[#24211F]/60">
+                            Live webcam snapshot
+                          </span>
+                        </button>
+                      </div>
+                    )}
+
+                    {cameraError && (
+                      <p className="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                        {cameraError}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 3. URL Mode */}
+                {imageSourceMode === "url" && (
+                  <div>
+                    <input
+                      type="url"
+                      placeholder="https://images.unsplash.com/photo-..."
+                      value={formData.imageUrl}
+                      onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                      className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                    />
+                  </div>
+                )}
+
+                {/* Optimizing Spinner */}
+                {isCompressing && (
+                  <div className="p-3 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE] flex items-center justify-center gap-2 text-xs text-[#24211F]/80">
+                    <RefreshCw className="w-4 h-4 text-[#C58B5B] animate-spin" />
+                    <span>Compressing & optimizing photo...</span>
+                  </div>
+                )}
+
+                {/* Image Preview Box if set */}
+                {formData.imageUrl && !isCompressing && (
+                  <div className="flex items-center gap-3 p-2.5 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE]">
+                    <div className="w-14 h-14 rounded-lg overflow-hidden relative shrink-0 border border-[#E6DCCE]">
+                      <Image
+                        src={formData.imageUrl}
+                        alt="Photo preview"
+                        fill
+                        unoptimized={isUnoptimized(formData.imageUrl)}
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-[#2B1D18] truncate">
+                        {formData.imageUrl.startsWith("data:")
+                          ? "Photo captured & ready"
+                          : "Web photo linked"}
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
+                        <Check className="w-3 h-3" /> Will display on digital QR menu
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, imageUrl: "" })}
+                      className="p-1.5 text-stone-400 hover:text-rose-600 rounded-lg hover:bg-stone-200/50 transition-colors"
+                      title="Remove Photo"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Toggles */}
@@ -549,6 +979,35 @@ export default function MenuManagementPage() {
                 </label>
               </div>
 
+              {/* Preparation Time & Allergens */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-xs font-semibold text-[#24211F]/80 mb-1">
+                    Prep Time (Minutes)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="10"
+                    value={formData.preparationTime}
+                    onChange={(e) => setFormData({ ...formData, preparationTime: e.target.value })}
+                    className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#24211F]/80 mb-1">
+                    Allergens (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dairy, Nuts, Gluten"
+                    value={formData.allergens}
+                    onChange={(e) => setFormData({ ...formData, allergens: e.target.value })}
+                    className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                  />
+                </div>
+              </div>
+
               {/* Variants Builder */}
               <div className="space-y-2 pt-2 border-t border-[#E6DCCE]">
                 <span className="block text-xs font-bold text-[#2B1D18]">
@@ -557,7 +1016,7 @@ export default function MenuManagementPage() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Size name (e.g. Regular 12oz)"
+                    placeholder="Size name (e.g. Regular 12oz, Large 16oz)"
                     value={newVarName}
                     onChange={(e) => setNewVarName(e.target.value)}
                     className="flex-1 p-2 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl"
@@ -607,7 +1066,7 @@ export default function MenuManagementPage() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Addon (e.g. Oat Milk, Extra Shot)"
+                    placeholder="Addon (e.g. Oat Milk, Extra Shot, Caramel Drizzle)"
                     value={newAddonName}
                     onChange={(e) => setNewAddonName(e.target.value)}
                     className="flex-1 p-2 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl"
@@ -659,14 +1118,18 @@ export default function MenuManagementPage() {
               <div className="pt-3 border-t border-[#E6DCCE] flex gap-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="flex-1 py-2.5 bg-[#2B1D18] hover:bg-[#3D2B24] text-[#FAF5EC] font-bold rounded-xl text-xs transition-colors shadow-xs"
+                  disabled={isSubmitting || isCompressing}
+                  className="flex-1 py-2.5 bg-[#2B1D18] hover:bg-[#3D2B24] text-[#FAF5EC] font-bold rounded-xl text-xs transition-colors shadow-xs disabled:opacity-50"
                 >
-                  {isSubmitting ? "Publishing Item..." : "Publish to Menu"}
+                  {isSubmitting
+                    ? "Saving..."
+                    : editingItem
+                    ? "Save Changes"
+                    : "Publish to Menu"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={closeModal}
                   className="px-4 py-2.5 border border-[#E6DCCE] text-[#24211F]/70 hover:bg-[#FAF5EC] rounded-xl text-xs"
                 >
                   Cancel
