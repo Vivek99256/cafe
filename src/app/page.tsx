@@ -34,6 +34,9 @@ export default function HomePage() {
         body: JSON.stringify({ role }),
       });
       const data = await res.json();
+      if (data.token) {
+        localStorage.setItem("cafe_token", data.token);
+      }
       if (data.success && data.redirectTo) {
         window.location.href = data.redirectTo;
       }

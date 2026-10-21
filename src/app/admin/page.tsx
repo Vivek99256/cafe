@@ -70,9 +70,15 @@ export default function SuperAdminPage() {
 
   const fetchAdminData = async () => {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("cafe_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const [cafesRes, statsRes] = await Promise.all([
-        fetch("/api/admin/cafes"),
-        fetch("/api/admin/stats"),
+        fetch("/api/admin/cafes", { headers }),
+        fetch("/api/admin/stats", { headers }),
       ]);
 
       if (!cafesRes.ok || !statsRes.ok) {

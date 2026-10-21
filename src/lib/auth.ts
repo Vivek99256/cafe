@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 
@@ -6,7 +6,17 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "aura_cafe_ultra_secure_jwt_secret_token_94827591_xyz"
 );
 
-const COOKIE_NAME = "cafe_saas_session";
+export const COOKIE_NAME = "cafe_saas_session";
+
+export function getCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+  };
+}
 
 export interface AuthSession {
   userId: string;
@@ -46,8 +56,19 @@ export async function verifySessionToken(token: string): Promise<AuthSession | n
 
 export async function getSession(): Promise<AuthSession | null> {
   try {
+    // 1. Check cookies first
     const cookieStore = await cookies();
-    const token = cookieStore.get(COOKIE_NAME)?.value;
+    let token = cookieStore.get(COOKIE_NAME)?.value;
+
+    // 2. If cookie not present, check Authorization header (Bearer token)
+    if (!token) {
+      const headersList = await headers();
+      const authHeader = headersList.get("authorization");
+      if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+        token = authHeader.substring(7).trim();
+      }
+    }
+
     if (!token) return null;
     return await verifySessionToken(token);
   } catch {
@@ -57,13 +78,7 @@ export async function getSession(): Promise<AuthSession | null> {
 
 export async function setSessionCookie(token: string): Promise<void> {
   const cookieStore = await cookies();
-  cookieStore.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
+  cookieStore.set(COOKIE_NAME, token, getCookieOptions());
 }
 
 export async function clearSessionCookie(): Promise<void> {

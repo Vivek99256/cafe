@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { hashPassword, createSessionToken, setSessionCookie, AuthSession } from "@/lib/auth";
+import { hashPassword, createSessionToken, setSessionCookie, getCookieOptions, COOKIE_NAME, AuthSession } from "@/lib/auth";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -125,16 +125,25 @@ export async function POST(req: NextRequest) {
     };
 
     const token = await createSessionToken(sessionPayload);
-    await setSessionCookie(token);
+    try {
+      await setSessionCookie(token);
+    } catch {
+      // safe fallback
+    }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
+      token,
       cafe: {
         id: result.cafe.id,
         name: result.cafe.name,
         slug: result.cafe.slug,
       },
     });
+
+    response.cookies.set(COOKIE_NAME, token, getCookieOptions());
+
+    return response;
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json({ error: "Failed to register cafe" }, { status: 500 });

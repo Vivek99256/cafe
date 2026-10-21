@@ -50,7 +50,12 @@ export default function DashboardLayout({
   useEffect(() => {
     async function checkAuth() {
       try {
-        const res = await fetch("/api/auth/me");
+        const token = typeof window !== "undefined" ? localStorage.getItem("cafe_token") : null;
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch("/api/auth/me", { headers });
         if (!res.ok) {
           router.push("/login");
           return;
@@ -93,6 +98,9 @@ export default function DashboardLayout({
   }, [session?.cafeId, audioEnabled]);
 
   const handleLogout = async () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cafe_token");
+    }
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
   };
