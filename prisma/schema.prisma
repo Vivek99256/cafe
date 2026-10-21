@@ -1,0 +1,245 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String           @id @default(cuid())
+  name         String
+  email        String           @unique
+  passwordHash String
+  role         String           @default("CAFE_OWNER") // SUPER_ADMIN, CAFE_OWNER, CAFE_MANAGER, KITCHEN_STAFF
+  phone        String?
+  avatarUrl    String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  memberships  CafeMembership[]
+}
+
+model Cafe {
+  id                   String           @id @default(cuid())
+  name                 String
+  slug                 String           @unique
+  tagline              String?
+  description          String?
+  logoUrl              String?
+  coverUrl             String?
+  phone                String?
+  email                String?
+  address              String?
+  city                 String?
+  currency             String           @default("INR")
+  currencySymbol       String           @default("₹")
+  taxRate              Float            @default(5.0) // 5% GST
+  isAcceptingOrders    Boolean          @default(true)
+  openingHours         String?          @default("08:00 AM - 11:00 PM")
+  tableOrderingEnabled Boolean          @default(true)
+  estimatedPrepTime    Int              @default(15) // minutes
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  memberships          CafeMembership[]
+  subscription         Subscription?
+  tables               Table[]
+  categories           MenuCategory[]
+  menuItems            MenuItem[]
+  orders               Order[]
+}
+
+model CafeMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  cafeId    String
+  role      String   @default("CAFE_OWNER") // CAFE_OWNER, CAFE_MANAGER, KITCHEN_STAFF
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cafe      Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cafeId])
+}
+
+model SubscriptionPlan {
+  id           String         @id @default(cuid())
+  name         String
+  slug         String         @unique
+  price        Float
+  interval     String         @default("monthly")
+  maxTables    Int            @default(15)
+  maxMenuItems Int            @default(100)
+  maxStaff     Int            @default(3)
+  features     String         // JSON string array
+  isPopular    Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String           @id @default(cuid())
+  cafeId             String           @unique
+  planId             String
+  status             String           @default("ACTIVE") // ACTIVE, TRIALING, PAST_DUE, CANCELLED
+  currentPeriodStart DateTime         @default(now())
+  currentPeriodEnd   DateTime
+  isDevMode          Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  cafe               Cafe             @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  plan               SubscriptionPlan @relation(fields: [planId], references: [id])
+}
+
+model Table {
+  id          String   @id @default(cuid())
+  cafeId      String
+  tableNumber String   // "T01", "T02", etc.
+  label       String?  // "Garden Patio", "Window Side"
+  capacity    Int      @default(4)
+  isActive    Boolean  @default(true)
+  qrToken     String   // Secure token for anti-tampering
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cafe        Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  orders      Order[]
+
+  @@unique([cafeId, tableNumber])
+}
+
+model MenuCategory {
+  id          String     @id @default(cuid())
+  cafeId      String
+  name        String
+  slug        String
+  description String?
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  cafe        Cafe       @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  menuItems   MenuItem[]
+
+  @@unique([cafeId, slug])
+}
+
+model MenuItem {
+  id              String           @id @default(cuid())
+  cafeId          String
+  categoryId      String
+  name            String
+  slug            String
+  description     String
+  price           Float
+  imageUrl        String?
+  isAvailable     Boolean          @default(true)
+  isFeatured      Boolean          @default(false)
+  isSpecial       Boolean          @default(false)
+  isVeg           Boolean          @default(true)
+  isVegan         Boolean          @default(false)
+  isSpicy         Boolean          @default(false)
+  allergens       String?
+  preparationTime Int              @default(10) // minutes
+  sortOrder       Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  cafe            Cafe             @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  category        MenuCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  variants        ProductVariant[]
+  addOns          AddOn[]
+  orderItems      OrderItem[]
+}
+
+model ProductVariant {
+  id         String   @id @default(cuid())
+  menuItemId String
+  name       String   // "Small (8oz)", "Regular (12oz)", "Large (16oz)"
+  price      Float
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+}
+
+model AddOn {
+  id          String   @id @default(cuid())
+  menuItemId  String
+  name        String   // "Extra Shot", "Oat Milk", "Hazelnut Syrup"
+  price       Float
+  maxQuantity Int      @default(3)
+  isRequired  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id                 String               @id @default(cuid())
+  orderNumber        String               @unique // "ORD-94812"
+  cafeId             String
+  tableId            String
+  customerName       String
+  customerPhone      String?
+  customerEmail      String?
+  status             String               @default("PENDING") // PENDING, ACCEPTED, PREPARING, READY, SERVED, CANCELLED
+  subtotal           Float
+  taxAmount          Float
+  discountAmount     Float                @default(0)
+  totalAmount        Float
+  paymentStatus      String               @default("UNPAID") // UNPAID, PAID
+  paymentMethod      String               @default("PAY_AT_COUNTER") // PAY_AT_COUNTER, UPI_ONLINE, CARD
+  notes              String?
+  rejectReason       String?
+  estimatedReadyTime DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  cafe               Cafe                 @relation(fields: [cafeId], references: [id], onDelete: Cascade)
+  table              Table                @relation(fields: [tableId], references: [id])
+  items              OrderItem[]
+  statusHistory      OrderStatusHistory[]
+}
+
+model OrderItem {
+  id                  String            @id @default(cuid())
+  orderId             String
+  menuItemId          String?
+  name                String            // Snapshot of item name
+  variantName         String?           // Snapshot of variant selected
+  unitPrice           Float             // Snapshot unit price
+  quantity            Int
+  totalPrice          Float             // Snapshot of (unitPrice + addons) * quantity
+  specialInstructions String?
+  createdAt           DateTime          @default(now())
+
+  order               Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem            MenuItem?         @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  selectedAddOns      OrderItemAddOn[]
+}
+
+model OrderItemAddOn {
+  id          String    @id @default(cuid())
+  orderItemId String
+  name        String    // Snapshot
+  price       Float     // Snapshot
+  quantity    Int       @default(1)
+
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+}
+
+model OrderStatusHistory {
+  id        String   @id @default(cuid())
+  orderId   String
+  status    String   // PENDING, ACCEPTED, PREPARING, READY, SERVED, CANCELLED
+  note      String?
+  changedBy String?  // "Customer", "Manager", "Kitchen", "System"
+  createdAt DateTime @default(now())
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
