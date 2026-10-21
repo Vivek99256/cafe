@@ -19,6 +19,7 @@ import {
   Menu,
   X,
   Shield,
+  Users,
 } from "lucide-react";
 import { playOrderNotificationSound } from "@/lib/audio";
 
@@ -136,6 +137,11 @@ export default function DashboardLayout({
       name: "Analytics",
       href: "/dashboard/analytics",
       icon: TrendingUp,
+    },
+    {
+      name: "Staff & Team",
+      href: "/dashboard/staff",
+      icon: Users,
     },
     {
       name: "Cafe Settings",
