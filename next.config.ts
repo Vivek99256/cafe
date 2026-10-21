@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  outputFileTracingIncludes: {
+    "/**": ["./prisma/dev.db", "./prisma/schema.prisma"],
+  },
   turbopack: {
     rules: {
       "*.css": {
