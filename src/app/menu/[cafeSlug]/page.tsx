@@ -709,6 +709,7 @@ export default function CustomerMenuPage({
                             src={item.imageUrl}
                             alt={item.name}
                             fill
+                            unoptimized={Boolean(item.imageUrl?.startsWith("data:") || (!item.imageUrl?.includes("images.unsplash.com") && !item.imageUrl?.includes("images.pexels.com")))}
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
@@ -768,6 +769,7 @@ export default function CustomerMenuPage({
                   src={selectedItem.imageUrl}
                   alt={selectedItem.name}
                   fill
+                  unoptimized={Boolean(selectedItem.imageUrl?.startsWith("data:") || (!selectedItem.imageUrl?.includes("images.unsplash.com") && !selectedItem.imageUrl?.includes("images.pexels.com")))}
                   className="object-cover"
                 />
               ) : (

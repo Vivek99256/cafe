@@ -30,17 +30,44 @@ export async function PUT(
         ...(body.categoryId && { categoryId: body.categoryId }),
         ...(body.description !== undefined && { description: body.description.trim() }),
         ...(body.price !== undefined && { price: parseFloat(body.price) }),
-        ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
+        ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl || null }),
         ...(body.isAvailable !== undefined && { isAvailable: body.isAvailable }),
         ...(body.isFeatured !== undefined && { isFeatured: body.isFeatured }),
         ...(body.isSpecial !== undefined && { isSpecial: body.isSpecial }),
         ...(body.isVeg !== undefined && { isVeg: body.isVeg }),
         ...(body.isVegan !== undefined && { isVegan: body.isVegan }),
         ...(body.isSpicy !== undefined && { isSpicy: body.isSpicy }),
-        ...(body.allergens !== undefined && { allergens: body.allergens }),
+        ...(body.allergens !== undefined && { allergens: body.allergens || null }),
         ...(body.preparationTime !== undefined && { preparationTime: parseInt(body.preparationTime, 10) }),
       },
     });
+
+    if (Array.isArray(body.variants)) {
+      await prisma.productVariant.deleteMany({ where: { menuItemId: id } });
+      if (body.variants.length > 0) {
+        await prisma.productVariant.createMany({
+          data: body.variants.map((v: { name: string; price: number; isDefault?: boolean }) => ({
+            menuItemId: id,
+            name: v.name,
+            price: parseFloat(v.price.toString()),
+            isDefault: !!v.isDefault,
+          })),
+        });
+      }
+    }
+
+    if (Array.isArray(body.addOns)) {
+      await prisma.addOn.deleteMany({ where: { menuItemId: id } });
+      if (body.addOns.length > 0) {
+        await prisma.addOn.createMany({
+          data: body.addOns.map((a: { name: string; price: number }) => ({
+            menuItemId: id,
+            name: a.name,
+            price: parseFloat(a.price.toString()),
+          })),
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, item: updated });
   } catch (error) {
