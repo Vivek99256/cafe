@@ -40,6 +40,9 @@ model Cafe {
   openingHours         String?          @default("08:00 AM - 11:00 PM")
   tableOrderingEnabled Boolean          @default(true)
   estimatedPrepTime    Int              @default(15) // minutes
+  googleReviewUrl      String?
+  whatsappNotificationsEnabled Boolean @default(true)
+  managerWhatsappPhone String?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -49,6 +52,7 @@ model Cafe {
   categories           MenuCategory[]
   menuItems            MenuItem[]
   orders               Order[]
+  feedbacks            Feedback[]
 }
 
 model CafeMembership {
@@ -147,6 +151,9 @@ model MenuItem {
   allergens       String?
   preparationTime Int              @default(10) // minutes
   sortOrder       Int              @default(0)
+  trackStock      Boolean          @default(false)
+  stockQuantity   Int?             @default(0)
+  dailyStock      Int?             @default(0)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
@@ -205,6 +212,7 @@ model Order {
   table              Table                @relation(fields: [tableId], references: [id])
   items              OrderItem[]
   statusHistory      OrderStatusHistory[]
+  feedback           Feedback?
 }
 
 model OrderItem {
@@ -243,4 +251,20 @@ model OrderStatusHistory {
   createdAt DateTime @default(now())
 
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Feedback {
+  id                  String   @id @default(cuid())
+  orderId             String   @unique
+  cafeId              String
+  customerName        String
+  rating              Int      // Overall rating 1 to 5
+  foodRating          Int?     // 1 to 5
+  serviceRating       Int?     // 1 to 5
+  comment             String?
+  googleReviewClicked Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cafe                Cafe     @relation(fields: [cafeId], references: [id], onDelete: Cascade)
 }

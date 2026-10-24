@@ -10,6 +10,8 @@ import {
   RefreshCw,
   Clock,
   Sparkles,
+  Star,
+  MessageCircle,
 } from "lucide-react";
 
 interface CafeSettings {
@@ -31,6 +33,9 @@ interface CafeSettings {
   openingHours?: string | null;
   tableOrderingEnabled: boolean;
   estimatedPrepTime: number;
+  googleReviewUrl?: string | null;
+  whatsappNotificationsEnabled: boolean;
+  managerWhatsappPhone?: string | null;
   subscription?: {
     status: string;
     isDevMode: boolean;
@@ -279,7 +284,86 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Section 4: Subscription Status */}
+        {/* Section 4: Customer Review Booster & WhatsApp Alerts */}
+        <div className="bg-[#FFFDF9] rounded-2xl border border-[#E6DCCE] p-6 shadow-xs space-y-5">
+          <div className="border-b border-[#E6DCCE] pb-3">
+            <h3 className="font-serif font-bold text-lg text-[#2B1D18] flex items-center gap-2">
+              <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+              <span>Google Review Booster & WhatsApp Notifications</span>
+            </h3>
+            <p className="text-xs text-[#24211F]/70 mt-0.5">
+              Automate customer 5-star reviews on Google Maps and configure WhatsApp dispatch notifications.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1 md:col-span-2">
+              <label className="block text-xs font-semibold text-[#24211F]/80">
+                Google Maps Review URL (Review Booster)
+              </label>
+              <input
+                type="url"
+                value={settings.googleReviewUrl || ""}
+                onChange={(e) => setSettings({ ...settings, googleReviewUrl: e.target.value })}
+                placeholder="https://g.page/r/your-cafe/review or Google Business link"
+                className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+              />
+              <p className="text-[11px] text-[#24211F]/60">
+                ⭐ When customers give 4 or 5 stars on their digital order receipt, they are automatically prompted to share it directly on Google Maps!
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-xs font-semibold text-[#24211F]/80">
+                Kitchen / Manager WhatsApp Number
+              </label>
+              <div className="relative">
+                <input
+                  type="tel"
+                  value={settings.managerWhatsappPhone || ""}
+                  onChange={(e) => setSettings({ ...settings, managerWhatsappPhone: e.target.value })}
+                  placeholder="+919876543210 (with country code)"
+                  className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                />
+              </div>
+              <p className="text-[11px] text-[#24211F]/60">
+                📱 Receive 1-click WhatsApp order dispatch alerts and notifications directly to staff phone.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between p-3.5 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE]">
+              <div>
+                <span className="block text-xs font-bold text-[#2B1D18] flex items-center gap-1.5">
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>WhatsApp Customer Alerts</span>
+                </span>
+                <span className="text-[11px] text-[#24211F]/60">
+                  Enable 1-click WhatsApp notification to customers when food is ready
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setSettings({
+                    ...settings,
+                    whatsappNotificationsEnabled: !settings.whatsappNotificationsEnabled,
+                  })
+                }
+                className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                  settings.whatsappNotificationsEnabled ? "bg-[#75856B]" : "bg-stone-300"
+                }`}
+              >
+                <div
+                  className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                    settings.whatsappNotificationsEnabled ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 5: Subscription Status */}
         {settings.subscription && (
           <div className="bg-[#2B1D18] text-[#FAF5EC] rounded-2xl p-6 shadow-md space-y-3">
             <div className="flex items-center justify-between">

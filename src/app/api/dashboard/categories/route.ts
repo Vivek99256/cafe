@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session || !session.cafeId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const categories = await prisma.menuCategory.findMany({
+      where: { cafeId: session.cafeId },
+      orderBy: { sortOrder: "asc" },
+      include: {
+        menuItems: {
+          select: { id: true, name: true, price: true, isAvailable: true },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
+
+    return NextResponse.json({ categories });
+  } catch (error) {
+    console.error("Get categories error:", error);
+    return NextResponse.json({ error: "Failed to fetch categories" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();

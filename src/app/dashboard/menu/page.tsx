@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   Plus,
   Search,
@@ -16,6 +17,7 @@ import {
   UploadCloud,
   Link as LinkIcon,
   Sparkles,
+  Tags,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -50,6 +52,9 @@ interface MenuItem {
   preparationTime: number;
   variants: Variant[];
   addOns: AddOn[];
+  trackStock?: boolean;
+  stockQuantity?: number | null;
+  dailyStock?: number | null;
 }
 
 interface Category {
@@ -88,6 +93,8 @@ export default function MenuManagementPage() {
     isSpecial: false,
     allergens: "",
     preparationTime: "10",
+    trackStock: false,
+    stockQuantity: "10",
   });
 
   const [variantsList, setVariantsList] = useState<Variant[]>([]);
@@ -331,6 +338,8 @@ export default function MenuManagementPage() {
       isSpecial: false,
       allergens: "",
       preparationTime: "10",
+      trackStock: false,
+      stockQuantity: "10",
     });
     setVariantsList([]);
     setAddonsList([]);
@@ -354,6 +363,8 @@ export default function MenuManagementPage() {
       isSpecial: item.isSpecial,
       allergens: item.allergens || "",
       preparationTime: (item.preparationTime || 10).toString(),
+      trackStock: Boolean(item.trackStock),
+      stockQuantity: (item.stockQuantity ?? 10).toString(),
     });
     setVariantsList(item.variants || []);
     setAddonsList(item.addOns || []);
@@ -375,6 +386,23 @@ export default function MenuManagementPage() {
     setModalError(null);
   };
 
+  const handleAdjustStock = async (item: MenuItem, delta: number) => {
+    const current = item.stockQuantity ?? 0;
+    const newQty = Math.max(0, current + delta);
+    try {
+      const res = await fetch(`/api/dashboard/menu/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stockQuantity: newQty }),
+      });
+      if (res.ok) {
+        await fetchMenu();
+      }
+    } catch (err) {
+      console.error("Adjust stock error:", err);
+    }
+  };
+
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.price || !formData.categoryId) {
@@ -386,9 +414,13 @@ export default function MenuManagementPage() {
     setModalError(null);
 
     try {
+      const parsedStock = parseInt(formData.stockQuantity, 10) || 0;
       const payload = {
         ...formData,
         price: parseFloat(formData.price),
+        trackStock: Boolean(formData.trackStock),
+        stockQuantity: parsedStock,
+        dailyStock: parsedStock,
         variants: variantsList,
         addOns: addonsList,
       };
@@ -440,7 +472,15 @@ export default function MenuManagementPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <Link
+            href="/dashboard/categories"
+            className="px-3.5 py-2 bg-[#FAF5EC] hover:bg-[#F2E9DB] text-[#2B1D18] border border-[#E6DCCE] rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
+          >
+            <Tags className="w-4 h-4 text-[#C58B5B]" />
+            <span>Manage Categories</span>
+          </Link>
+
           <button
             onClick={handleOpenCreateModal}
             className="px-4 py-2 bg-[#2B1D18] hover:bg-[#3D2B24] text-[#FAF5EC] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
@@ -594,6 +634,47 @@ export default function MenuManagementPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* Stock Inventory Tracker Badge */}
+                        {item.trackStock && (
+                          <div className="flex items-center justify-between py-1 px-2.5 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE] text-xs">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-[#24211F]/70 text-[11px]">Stock:</span>
+                              <span
+                                className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
+                                  (item.stockQuantity ?? 0) <= 0
+                                    ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                    : (item.stockQuantity ?? 0) <= 5
+                                    ? "bg-amber-100 text-amber-900 border border-amber-300"
+                                    : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                }`}
+                              >
+                                {(item.stockQuantity ?? 0) <= 0
+                                  ? "Out of Stock (0)"
+                                  : `${item.stockQuantity} remaining`}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustStock(item, -1)}
+                                className="w-5 h-5 rounded-md bg-white hover:bg-stone-200 border border-[#E6DCCE] flex items-center justify-center font-bold text-xs text-stone-700 cursor-pointer"
+                                title="Decrease Stock by 1"
+                              >
+                                -
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAdjustStock(item, 1)}
+                                className="w-5 h-5 rounded-md bg-white hover:bg-stone-200 border border-[#E6DCCE] flex items-center justify-center font-bold text-xs text-stone-700 cursor-pointer"
+                                title="Increase Stock by 1"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Controls */}
@@ -1006,6 +1087,53 @@ export default function MenuManagementPage() {
                     className="w-full p-2.5 text-xs bg-[#FAF5EC] border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
                   />
                 </div>
+              </div>
+
+              {/* Daily Inventory Stock Tracking Section */}
+              <div className="p-3.5 bg-[#FAF5EC] rounded-xl border border-[#E6DCCE] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="block text-xs font-bold text-[#2B1D18]">
+                      Daily Stock & Inventory Tracking
+                    </span>
+                    <span className="text-[11px] text-[#24211F]/60">
+                      Auto mark as &apos;Sold Out&apos; when daily inventory runs out
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, trackStock: !formData.trackStock })}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${
+                      formData.trackStock ? "bg-[#75856B]" : "bg-stone-300"
+                    }`}
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        formData.trackStock ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {formData.trackStock && (
+                  <div className="pt-2 border-t border-[#E6DCCE]/60 flex items-center gap-3">
+                    <div className="w-36">
+                      <label className="block text-[11px] font-semibold text-[#24211F]/80 mb-1">
+                        Stock Quantity Today:
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.stockQuantity}
+                        onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
+                        className="w-full p-2 text-xs bg-white border border-[#E6DCCE] rounded-xl focus:outline-none focus:border-[#C58B5B]"
+                      />
+                    </div>
+                    <div className="text-[11px] text-[#24211F]/60 pt-4">
+                      When orders exhaust this quantity, QR customers will automatically see &quot;Sold Out&quot;.
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Variants Builder */}

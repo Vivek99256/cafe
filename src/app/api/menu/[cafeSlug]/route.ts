@@ -29,7 +29,6 @@ export async function GET(
           orderBy: { sortOrder: "asc" },
           include: {
             menuItems: {
-              where: { isAvailable: true },
               orderBy: { sortOrder: "asc" },
               include: {
                 variants: {

@@ -39,6 +39,12 @@ export async function PUT(
         ...(body.isSpicy !== undefined && { isSpicy: body.isSpicy }),
         ...(body.allergens !== undefined && { allergens: body.allergens || null }),
         ...(body.preparationTime !== undefined && { preparationTime: parseInt(body.preparationTime, 10) }),
+        ...(body.trackStock !== undefined && { trackStock: Boolean(body.trackStock) }),
+        ...(body.stockQuantity !== undefined && {
+          stockQuantity: parseInt(body.stockQuantity.toString(), 10) || 0,
+          ...(parseInt(body.stockQuantity.toString(), 10) === 0 ? { isAvailable: false } : {}),
+        }),
+        ...(body.dailyStock !== undefined && { dailyStock: parseInt(body.dailyStock.toString(), 10) || 0 }),
       },
     });
 
@@ -87,7 +93,8 @@ export async function PATCH(
     }
 
     const { id } = await context.params;
-    const { isAvailable } = await req.json();
+    const body = await req.json();
+    const { isAvailable, stockQuantity, trackStock } = body;
 
     const existing = await prisma.menuItem.findFirst({
       where: { id, cafeId: session.cafeId },
@@ -97,9 +104,22 @@ export async function PATCH(
       return NextResponse.json({ error: "Menu item not found" }, { status: 404 });
     }
 
+    const data: Record<string, unknown> = {};
+    if (isAvailable !== undefined) data.isAvailable = Boolean(isAvailable);
+    if (trackStock !== undefined) data.trackStock = Boolean(trackStock);
+    if (stockQuantity !== undefined) {
+      const qty = Math.max(0, parseInt(stockQuantity.toString(), 10) || 0);
+      data.stockQuantity = qty;
+      if (qty === 0) {
+        data.isAvailable = false;
+      } else if (isAvailable === undefined && !existing.isAvailable && qty > 0) {
+        data.isAvailable = true;
+      }
+    }
+
     const updated = await prisma.menuItem.update({
       where: { id },
-      data: { isAvailable },
+      data,
     });
 
     return NextResponse.json({ success: true, item: updated });

@@ -93,25 +93,29 @@
     color: black !important;
   }
 
-  header, nav, footer, .no-print, aside, button {
+  header, nav, footer, aside, button, .no-print {
     display: none !important;
   }
 
-  .print-only {
-    display: block !important;
+  body * {
+    visibility: hidden;
   }
 
-  .printable-card {
-    page-break-inside: avoid;
-    border: 1px solid #ccc !important;
-    box-shadow: none !important;
+  .printable-card,
+  .printable-card *,
+  .printable-kot,
+  .printable-kot * {
+    visibility: visible;
   }
 
+  .printable-card,
   .printable-kot {
-    page-break-inside: avoid;
+    position: absolute;
+    left: 0;
+    top: 0;
     width: 80mm !important;
     margin: 0 auto;
-    font-family: monospace !important;
-    color: black !important;
+    page-break-inside: avoid;
+    box-shadow: none !important;
   }
 }

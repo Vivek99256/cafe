@@ -14,11 +14,15 @@ export async function PATCH(
     }
 
     const { orderId } = await context.params;
-    const { status, note, rejectReason } = await request.json();
+    const { status, note, rejectReason, paymentStatus, paymentMethod } = await request.json();
 
     const validStatuses = ["PENDING", "ACCEPTED", "PREPARING", "READY", "SERVED", "CANCELLED"];
-    if (!validStatuses.includes(status)) {
+    if (status && !validStatuses.includes(status)) {
       return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+    }
+
+    if (!status && !paymentStatus && !paymentMethod) {
+      return NextResponse.json({ error: "No update parameters provided" }, { status: 400 });
     }
 
     // Verify order belongs to the user's cafe
@@ -38,20 +42,61 @@ export async function PATCH(
 
     // Update status in transaction
     const updatedOrder = await prisma.$transaction(async (tx) => {
+      const dataToUpdate: Record<string, unknown> = {};
+      if (status) {
+        dataToUpdate.status = status;
+        if (rejectReason !== undefined) {
+          dataToUpdate.rejectReason = rejectReason || null;
+        }
+      }
+      if (paymentStatus) {
+        dataToUpdate.paymentStatus = paymentStatus;
+      }
+      if (paymentMethod) {
+        dataToUpdate.paymentMethod = paymentMethod;
+      }
+
       const updated = await tx.order.update({
         where: { id: orderId },
-        data: {
-          status,
-          rejectReason: rejectReason || null,
-          paymentStatus: status === "SERVED" && order.paymentMethod === "PAY_AT_COUNTER" ? "PAID" : order.paymentStatus,
-        },
+        data: dataToUpdate,
       });
+
+      // If order is cancelled, replenish stock for tracked items
+      if (status === "CANCELLED" && order.status !== "CANCELLED") {
+        const orderItems = await tx.orderItem.findMany({
+          where: { orderId },
+        });
+        for (const item of orderItems) {
+          if (item.menuItemId) {
+            const mItem = await tx.menuItem.findUnique({
+              where: { id: item.menuItemId },
+            });
+            if (mItem && mItem.trackStock) {
+              await tx.menuItem.update({
+                where: { id: item.menuItemId },
+                data: {
+                  stockQuantity: (mItem.stockQuantity ?? 0) + item.quantity,
+                  isAvailable: true,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      const historyNote =
+        note ||
+        (status && paymentStatus
+          ? `Status set to ${status}, payment marked as ${paymentStatus}`
+          : status
+          ? `Order marked as ${status} by ${session.name} (${session.role})`
+          : `Payment updated to ${paymentStatus} by ${session.name}`);
 
       await tx.orderStatusHistory.create({
         data: {
           orderId,
-          status,
-          note: note || `Order marked as ${status} by ${session.name} (${session.role})`,
+          status: status || order.status,
+          note: historyNote,
           changedBy: `${session.name} (${session.role})`,
         },
       });

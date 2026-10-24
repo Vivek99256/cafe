@@ -55,6 +55,9 @@ export async function PATCH(req: NextRequest) {
         ...(body.estimatedPrepTime !== undefined && { estimatedPrepTime: parseInt(body.estimatedPrepTime, 10) }),
         ...(body.logoUrl !== undefined && { logoUrl: body.logoUrl }),
         ...(body.coverUrl !== undefined && { coverUrl: body.coverUrl }),
+        ...(body.googleReviewUrl !== undefined && { googleReviewUrl: body.googleReviewUrl ? body.googleReviewUrl.trim() : null }),
+        ...(body.whatsappNotificationsEnabled !== undefined && { whatsappNotificationsEnabled: Boolean(body.whatsappNotificationsEnabled) }),
+        ...(body.managerWhatsappPhone !== undefined && { managerWhatsappPhone: body.managerWhatsappPhone ? body.managerWhatsappPhone.trim() : null }),
       },
     });
 

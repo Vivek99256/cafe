@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
     if (status) {
       if (status === "active") {
         whereClause.status = { in: ["PENDING", "ACCEPTED", "PREPARING", "READY"] };
+      } else if (status === "live") {
+        whereClause.status = { in: ["PENDING", "ACCEPTED", "PREPARING", "READY", "SERVED"] };
       } else {
         whereClause.status = status;
       }
@@ -33,8 +35,9 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       whereClause.OR = [
-        { orderNumber: { contains: search } },
-        { customerName: { contains: search } },
+        { orderNumber: { contains: search, mode: "insensitive" } },
+        { customerName: { contains: search, mode: "insensitive" } },
+        { table: { tableNumber: { contains: search, mode: "insensitive" } } },
       ];
     }
 
@@ -48,6 +51,7 @@ export async function GET(req: NextRequest) {
       where: whereClause,
       include: {
         table: true,
+        cafe: true,
         items: {
           include: {
             selectedAddOns: true,

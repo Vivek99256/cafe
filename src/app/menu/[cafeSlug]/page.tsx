@@ -53,6 +53,8 @@ interface MenuItem {
   preparationTime: number;
   variants: Variant[];
   addOns: AddOn[];
+  trackStock?: boolean;
+  stockQuantity?: number | null;
 }
 
 interface MenuCategory {
@@ -250,6 +252,11 @@ export default function CustomerMenuPage({
       prev
         .map((item) => {
           if (item.id === cartId) {
+            const menuItem = categories.flatMap((c) => c.menuItems).find((m) => m.id === item.menuItemId);
+            if (delta > 0 && menuItem?.trackStock && item.quantity + delta > (menuItem.stockQuantity ?? 0)) {
+              alert(`Only ${menuItem.stockQuantity} remaining in stock.`);
+              return item;
+            }
             const newQty = item.quantity + delta;
             if (newQty <= 0) return null;
             return {
@@ -658,6 +665,11 @@ export default function CustomerMenuPage({
                                 Vegan
                               </span>
                             )}
+                            {item.trackStock && (item.stockQuantity ?? 0) > 0 && (item.stockQuantity ?? 0) <= 5 && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold">
+                                🔥 Only {item.stockQuantity} left!
+                              </span>
+                            )}
                           </div>
 
                           <h3 className="font-serif font-bold text-sm text-[#2B1D18] leading-tight group-hover:text-[#C58B5B] transition-colors">
@@ -670,7 +682,7 @@ export default function CustomerMenuPage({
 
                           {item.allergens && (
                             <span className="inline-block text-[10px] text-[#24211F]/60 italic">
-                              {item.allergens}
+                              ({item.allergens})
                             </span>
                           )}
                         </div>
@@ -686,16 +698,16 @@ export default function CustomerMenuPage({
                             )}
                           </div>
 
-                          {item.isAvailable ? (
+                          {item.isAvailable && (!item.trackStock || (item.stockQuantity ?? 0) > 0) ? (
                             <button
                               onClick={() => handleOpenCustomization(item)}
-                              className="px-3 py-1.5 rounded-xl bg-[#2B1D18] text-[#FAF5EC] hover:bg-[#3D2B24] text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-xs"
+                              className="px-3 py-1.5 rounded-xl bg-[#2B1D18] text-[#FAF5EC] hover:bg-[#3D2B24] text-xs font-semibold flex items-center gap-1 transition-all active:scale-95 shadow-xs cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5 text-[#C58B5B]" />
                               <span>{hasCustomizations ? "Customize" : "Add"}</span>
                             </button>
                           ) : (
-                            <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-500 text-[11px] font-semibold">
+                            <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-500 text-[11px] font-semibold border border-stone-200">
                               Sold Out
                             </span>
                           )}

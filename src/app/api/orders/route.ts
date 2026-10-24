@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     const itemMap = new Map(dbMenuItems.map((m) => [m.id, m]));
 
-    // Check availability
+    // Check availability & inventory stock
     for (const item of items) {
       const dbItem = itemMap.get(item.menuItemId);
       if (!dbItem) {
@@ -77,6 +77,21 @@ export async function POST(req: NextRequest) {
           { error: `"${dbItem.name}" is currently sold out and cannot be ordered.` },
           { status: 400 }
         );
+      }
+      if (dbItem.trackStock) {
+        const remaining = dbItem.stockQuantity ?? 0;
+        const requestedQty = parseInt(item.quantity, 10) || 1;
+        if (remaining < requestedQty) {
+          return NextResponse.json(
+            {
+              error:
+                remaining > 0
+                  ? `"${dbItem.name}" only has ${remaining} left in stock. Please reduce your quantity.`
+                  : `"${dbItem.name}" has just sold out!`,
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -207,6 +222,20 @@ export async function POST(req: NextRequest) {
               },
             });
           }
+        }
+
+        // Decrement inventory stock if tracking enabled
+        const dbItem = itemMap.get(pItem.menuItemId);
+        if (dbItem && dbItem.trackStock) {
+          const currentStock = dbItem.stockQuantity ?? 0;
+          const newStock = Math.max(0, currentStock - pItem.quantity);
+          await tx.menuItem.update({
+            where: { id: dbItem.id },
+            data: {
+              stockQuantity: newStock,
+              ...(newStock === 0 ? { isAvailable: false } : {}),
+            },
+          });
         }
       }
 

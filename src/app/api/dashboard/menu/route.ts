@@ -54,6 +54,9 @@ export async function POST(req: NextRequest) {
       preparationTime = 10,
       variants = [],
       addOns = [],
+      trackStock = false,
+      stockQuantity = 0,
+      dailyStock = 0,
     } = body;
 
     if (!categoryId || !name || price === undefined) {
@@ -96,6 +99,9 @@ export async function POST(req: NextRequest) {
         isSpicy,
         allergens: allergens || null,
         preparationTime: parseInt(preparationTime, 10) || 10,
+        trackStock: Boolean(trackStock),
+        stockQuantity: trackStock ? parseInt(stockQuantity.toString(), 10) || 0 : 0,
+        dailyStock: trackStock ? parseInt(dailyStock.toString(), 10) || parseInt(stockQuantity.toString(), 10) || 0 : 0,
         variants: {
           create: variants.map((v: { name: string; price: number; isDefault?: boolean }) => ({
             name: v.name,

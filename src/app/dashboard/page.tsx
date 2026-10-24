@@ -15,6 +15,7 @@ import {
   Check,
   X,
   Play,
+  FileText,
 } from "lucide-react";
 import { formatCurrency, formatTimeAgo, getStatusDetails } from "@/lib/utils";
 
@@ -400,9 +401,24 @@ export default function DashboardOverviewPage() {
                             <CheckCircle2 className="w-3 h-3" /> Mark Served
                           </button>
                         )}
-                        {(order.status === "SERVED" || order.status === "CANCELLED") && (
-                          <span className="text-[11px] text-[#24211F]/50 italic">
-                            Completed
+                        {order.status === "SERVED" && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+                              Served ✓
+                            </span>
+                            <Link
+                              href={`/dashboard/orders?status=SERVED&search=${order.orderNumber}`}
+                              className="px-2 py-1 bg-[#2B1D18] hover:bg-[#3D2B24] text-[#FAF5EC] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors"
+                              title="View Tax Invoice Bill"
+                            >
+                              <FileText className="w-3 h-3 text-[#C58B5B]" />
+                              <span>Bill</span>
+                            </Link>
+                          </div>
+                        )}
+                        {order.status === "CANCELLED" && (
+                          <span className="text-[11px] text-rose-600/70 italic">
+                            Cancelled
                           </span>
                         )}
                       </td>
