@@ -37,7 +37,10 @@ export async function GET() {
     ]);
 
     const maxStaff = cafe?.subscription?.plan?.maxStaff || 10;
-    const canManageStaff = session.role === "CAFE_OWNER" || session.role === "SUPER_ADMIN";
+    const canManageStaff =
+      session.role === "CAFE_OWNER" ||
+      session.role === "CAFE_MANAGER" ||
+      session.role === "SUPER_ADMIN";
 
     return NextResponse.json({
       memberships: memberships.map((m) => ({
@@ -67,9 +70,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.role !== "CAFE_OWNER" && session.role !== "SUPER_ADMIN") {
+    if (
+      session.role !== "CAFE_OWNER" &&
+      session.role !== "CAFE_MANAGER" &&
+      session.role !== "SUPER_ADMIN"
+    ) {
       return NextResponse.json(
-        { error: "Only cafe owners can create staff and manager accounts." },
+        { error: "Only cafe owners and managers can create staff and kitchen accounts." },
         { status: 403 }
       );
     }

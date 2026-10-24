@@ -83,6 +83,11 @@ export async function GET(
     const tableOrders = rawTableOrders.filter((o) => {
       if (o.id === order.id) return true; // Always include current order
 
+      // If current order is unpaid/active, never lump in already settled & served orders from earlier sessions
+      if (order.paymentStatus === "UNPAID" && o.paymentStatus === "PAID" && o.status === "SERVED") {
+        return false;
+      }
+
       const oPhone = getCleanPhone(o.customerPhone);
       const oName = getCleanName(o.customerName);
 

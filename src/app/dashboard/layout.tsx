@@ -150,6 +150,14 @@ export default function DashboardLayout({
     },
   ];
 
+  const isKitchenStaff = session?.role === "KITCHEN_STAFF";
+  const displayedNavLinks = navLinks.filter((link) => {
+    if (isKitchenStaff) {
+      return ["Live Orders", "Menu Items", "Categories"].includes(link.name);
+    }
+    return true;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FAF5EC] flex flex-col items-center justify-center p-6 text-center">
@@ -179,7 +187,7 @@ export default function DashboardLayout({
                   {session?.cafeName || "Aura Cafe"}
                 </span>
                 <span className="block text-[10px] text-[#C58B5B] uppercase tracking-wider font-semibold">
-                  Manager Hub
+                  {isKitchenStaff ? "Kitchen KDS Display" : "Manager Hub"}
                 </span>
               </div>
             </Link>
@@ -187,7 +195,7 @@ export default function DashboardLayout({
 
           {/* Navigation Links */}
           <nav className="space-y-1">
-            {navLinks.map((link) => {
+            {displayedNavLinks.map((link) => {
               const isActive =
                 link.href === "/dashboard"
                   ? pathname === "/dashboard"
@@ -324,7 +332,7 @@ export default function DashboardLayout({
               </div>
 
               <nav className="space-y-1">
-                {navLinks.map((link) => (
+                {displayedNavLinks.map((link) => (
                   <Link
                     key={link.name}
                     href={link.href}

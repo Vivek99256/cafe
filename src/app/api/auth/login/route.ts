@@ -96,7 +96,12 @@ export async function POST(req: NextRequest) {
       // In some route handler contexts cookieStore is read-only
     }
 
-    const redirectTo = user.role === "SUPER_ADMIN" ? "/admin" : "/dashboard";
+    const redirectTo =
+      user.role === "SUPER_ADMIN"
+        ? "/admin"
+        : user.role === "KITCHEN_STAFF"
+        ? "/dashboard/orders"
+        : "/dashboard";
 
     // Explicitly set cookie on NextResponse headers for 100% reliability across Vercel / serverless
     const response = NextResponse.json({

@@ -48,12 +48,13 @@ export async function POST(req: NextRequest) {
     if (!slug) slug = "category";
 
     // Ensure unique slug for cafe
+    const baseSlug = slug;
     let existing = await prisma.menuCategory.findFirst({
       where: { cafeId: session.cafeId, slug },
     });
     let counter = 1;
     while (existing) {
-      slug = `${slug}-${counter}`;
+      slug = `${baseSlug}-${counter}`;
       counter++;
       existing = await prisma.menuCategory.findFirst({
         where: { cafeId: session.cafeId, slug },

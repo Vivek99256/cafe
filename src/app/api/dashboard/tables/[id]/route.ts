@@ -55,7 +55,7 @@ export async function DELETE(
       where: { id, cafeId: session.cafeId },
       include: {
         orders: {
-          where: { status: { in: ["PENDING", "ACCEPTED", "PREPARING", "READY"] } },
+          select: { id: true, status: true },
         },
       },
     });
@@ -64,16 +64,34 @@ export async function DELETE(
       return NextResponse.json({ error: "Table not found" }, { status: 404 });
     }
 
-    if (table.orders.length > 0) {
+    const hasActiveOrders = table.orders.some((o) =>
+      ["PENDING", "ACCEPTED", "PREPARING", "READY"].includes(o.status)
+    );
+
+    if (hasActiveOrders) {
       return NextResponse.json(
-        { error: "Cannot delete table with active pending or in-prep orders." },
+        { error: "Cannot remove table while it has active pending or in-kitchen orders." },
         { status: 400 }
       );
     }
 
+    // If table has past completed/cancelled order history, soft-delete (deactivate) so financial records are preserved
+    if (table.orders.length > 0) {
+      await prisma.table.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      return NextResponse.json({
+        success: true,
+        archived: true,
+        message: "Table has past order history. It has been archived and removed from active service.",
+      });
+    }
+
+    // If table has never had any orders, hard delete is safe
     await prisma.table.delete({ where: { id } });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, deleted: true });
   } catch (error) {
     console.error("Delete table error:", error);
     return NextResponse.json({ error: "Failed to delete table" }, { status: 500 });

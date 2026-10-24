@@ -12,9 +12,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.role !== "CAFE_OWNER" && session.role !== "SUPER_ADMIN") {
+    if (
+      session.role !== "CAFE_OWNER" &&
+      session.role !== "CAFE_MANAGER" &&
+      session.role !== "SUPER_ADMIN"
+    ) {
       return NextResponse.json(
-        { error: "Only cafe owners can remove staff members." },
+        { error: "Only cafe owners and managers can remove staff members." },
         { status: 403 }
       );
     }

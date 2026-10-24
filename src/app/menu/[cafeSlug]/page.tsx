@@ -330,6 +330,9 @@ export default function CustomerMenuPage({
         // confetti fallback
       }
 
+      // Clear cart so navigating back does not retain old items
+      setCart([]);
+
       // Redirect directly to the live customer order tracking page
       router.push(`/order/${data.orderNumber}`);
     } catch (err: unknown) {

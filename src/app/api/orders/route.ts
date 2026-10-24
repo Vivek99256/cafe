@@ -170,7 +170,10 @@ export async function POST(req: NextRequest) {
     let attempts = 0;
     while (!isUnique && attempts < 10) {
       const randomDigits = Math.floor(10000 + Math.random() * 90000);
-      orderNumber = `ORD-${randomDigits}`;
+      orderNumber =
+        attempts > 4
+          ? `ORD-${randomDigits}-${Date.now().toString().slice(-4)}`
+          : `ORD-${randomDigits}`;
       const existing = await prisma.order.findUnique({ where: { orderNumber } });
       if (!existing) isUnique = true;
       attempts++;

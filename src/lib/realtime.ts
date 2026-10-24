@@ -6,11 +6,10 @@ const globalForEvents = globalThis as unknown as {
 };
 
 export const orderEmitter = globalForEvents.orderEmitter ?? new EventEmitter();
-orderEmitter.setMaxListeners(100);
+orderEmitter.setMaxListeners(200);
 
-if (process.env.NODE_ENV !== "production") {
-  globalForEvents.orderEmitter = orderEmitter;
-}
+// Retain globally across all environments so route handlers share the same instance
+globalForEvents.orderEmitter = orderEmitter;
 
 export interface RealtimeOrderEvent {
   type: "NEW_ORDER" | "STATUS_UPDATE";

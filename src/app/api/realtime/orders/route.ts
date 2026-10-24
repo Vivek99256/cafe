@@ -19,13 +19,22 @@ export async function GET(req: NextRequest) {
       // Send initial heartbeat
       controller.enqueue(encoder.encode(`event: ping\ndata: ${Date.now()}\n\n`));
 
+      let isCleanedUp = false;
+      const cleanup = () => {
+        if (isCleanedUp) return;
+        isCleanedUp = true;
+        clearInterval(interval);
+        if (cafeId) orderEmitter.off(`cafe:${cafeId}`, onCafeEvent);
+        if (orderId) orderEmitter.off(`order:${orderId}`, onOrderEvent);
+      };
+
       const onCafeEvent = (data: RealtimeOrderEvent) => {
         try {
           controller.enqueue(
             encoder.encode(`event: order\ndata: ${JSON.stringify(data)}\n\n`)
           );
         } catch {
-          // Stream closed
+          cleanup();
         }
       };
 
@@ -35,7 +44,7 @@ export async function GET(req: NextRequest) {
             encoder.encode(`event: order\ndata: ${JSON.stringify(data)}\n\n`)
           );
         } catch {
-          // Stream closed
+          cleanup();
         }
       };
 
@@ -51,14 +60,12 @@ export async function GET(req: NextRequest) {
         try {
           controller.enqueue(encoder.encode(`event: ping\ndata: ${Date.now()}\n\n`));
         } catch {
-          clearInterval(interval);
+          cleanup();
         }
       }, 15000);
 
       req.signal.addEventListener("abort", () => {
-        clearInterval(interval);
-        if (cafeId) orderEmitter.off(`cafe:${cafeId}`, onCafeEvent);
-        if (orderId) orderEmitter.off(`order:${orderId}`, onOrderEvent);
+        cleanup();
       });
     },
   });

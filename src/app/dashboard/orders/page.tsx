@@ -172,6 +172,13 @@ export default function LiveOrdersPage() {
       // Find an existing tab for this table and this specific customer group
       let tab = tabs.find((t) => {
         if (t.tableId !== order.table.id) return false;
+
+        // If an existing tab was already fully settled (paid & served) and current order is active/unpaid,
+        // create a fresh tab rather than merging into the completed session
+        if (order.paymentStatus !== "PAID" && !t.hasUnpaid && t.allServed) {
+          return false;
+        }
+
         const tabPhone = getCleanPhone(t.customerPhone);
         const tabName = getCleanName(t.customerName);
 
